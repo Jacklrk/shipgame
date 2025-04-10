@@ -6,7 +6,6 @@ import android.content.pm.ActivityInfo
 import android.view.View
 import android.view.Window
 import android.view.WindowManager
-
 class GameActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // ✅ Llamar primero a super.onCreate
@@ -35,7 +34,7 @@ class GameActivity : AppCompatActivity() {
                 )
 
         // Establecer vista del juego
-        setContentView(GameView(this))
+        setContentView(GameView(this))  // Ya está aquí, no es necesario llamarlo dos veces.
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
