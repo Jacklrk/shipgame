@@ -18,7 +18,6 @@ open class Entity(
     fun getMaxShield() = maxescudo
     fun getAlmacenamiento() = almacenamiento
     fun getVelocidad() = velocidad
-
     fun moveBy(dx: Float, dy: Float) {
         x += dx
         y += dy
@@ -35,29 +34,31 @@ open class Entity(
     fun isAlive(): Boolean {
         return vida > 0
     }
+    fun damage(amount: Int) {
+        if (escudo > 0) {
+            val absorbed = minOf(amount, escudo)
+            escudo -= absorbed
+            val rest = amount - absorbed
+            vida -= rest
+        } else {
+            vida -= amount
+        }
+
+        if (vida <= 0) {
+            // puedes marcarlo como eliminado o quitarlo de la lista
+        }
+    }
+    open fun takeDamage(damage: Int) {
+        if (escudo > 0) {
+            val absorbed = minOf(damage, escudo)
+            escudo -= absorbed
+            val remaining = damage - absorbed
+            vida -= remaining
+        } else {
+            vida -= damage
+        }
+    }
+
+
 }
 
-/*{
-   open fun takeDamage(damage: Int) {
-       // Primero se resta del escudo si hay
-       if (shield > 0) {
-           val shieldDamage = minOf(damage, shield)
-           shield -= shieldDamage
-           damage -= shieldDamage
-       }
-       // Después, se resta de los puntos de vida
-       if (damage > 0) {
-           health -= damage
-       }
-   }
-
-   open fun isAlive(): Boolean {
-       return health > 0
-   }
-
-   // Método para mover la entidad
-   open fun move(dx: Float, dy: Float) {
-       x += dx
-       y += dy
-   }
-}*/

@@ -8,19 +8,16 @@ class Enemy(
     almacenamiento: Int,
     maxvida: Int,
     maxescudo: Int
-) : Entity(x, y, vida, escudo, almacenamiento, maxvida, maxescudo, velocidad=5f)
+) : Entity(x, y, vida, escudo, almacenamiento, maxvida, maxescudo, velocidad=2f){
+    fun attack(ship: Ship) {
+        val damage = 50
+        ship.takeDamage(damage)
+    }
+
+    override fun takeDamage(damage: Int) {
+        super.takeDamage(damage)
+        // Aquí puedes agregar efectos o animaciones si es golpeado
+    }
+}
 
 
-/*{
-
-   // Aquí puedes agregar más comportamientos específicos para los enemigos
-   fun attack(player: Ship) {
-       val damage = 10 // Ejemplo de daño
-       player.takeDamage(damage)
-   }
-
-   override fun takeDamage(damage: Int) {
-       // Lógica personalizada de daño si es necesario
-       super.takeDamage(damage)
-   }
-}*/
