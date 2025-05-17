@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- El minimapa y otros elementos se mostrarán en el layout -->
+    <com.example.shipgame.GameView
+        android:id="@+id/gameView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_centerInParent="true" />
+
+    <!-- El botón para abrir/cerrar el minimapa -->
+    <ImageButton
+        android:id="@+id/minimapButton"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:src="@drawable/minimap"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentRight="true"
+        android:background="?android:attr/selectableItemBackground"
+        android:contentDescription="Toggle Minimap" />
+</RelativeLayout>
