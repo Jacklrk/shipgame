@@ -9,16 +9,20 @@ import com.example.shipgame.entities.Ship
 import com.example.shipgame.entities.Enemy
 import com.example.shipgame.entities.Projectile
 import com.example.shipgame.entities.Entity
+import java.util.ArrayDeque
 
 
 
 class GameView(context: Context) : View(context) {
+    // Dimensiones lógicas del universo (pixeles del bitmap de fondo)
+    private val WORLD_WIDTH  = 5_000f
+    private val WORLD_HEIGHT = 2_750f
 
-    private val ship = Ship(x,y,vida = 80000, escudo = 100000,maxvida = 80000,maxescudo = 100000,0, velocidad = 8f)
+    private val ship = Ship(x,y,vida = 80000, escudo = 100000,maxvida = 80000,maxescudo = 100000,0, velocidad = 4f)
     private val paint = Paint()
     private var shipBitmap: Bitmap
 
-    private val shipSize = 70
+    private val shipSize = 150
 
     private val shipSprites: Map<Int, Bitmap>  // Sprites por ángulo
     private val backgroundMap: Bitmap
@@ -72,6 +76,24 @@ class GameView(context: Context) : View(context) {
         BitmapFactory.decodeResource(resources, R.drawable.laser1)
     private var isAttacking = false
 
+    //EXPLOSIONES
+    // --- explosiones ---
+    private val atlas = AtlasManager.bitmap()
+    private val explosionRects = AtlasManager.frames("explosion")
+    private val activeExplosions = mutableListOf<ExplosionInstance>()
+    private val explosionPool = ArrayDeque<FrameAnimation>()
+
+    private data class ExplosionInstance(
+        val anim: FrameAnimation,
+        var x: Float,
+        var y: Float
+    )
+
+    private fun spawnExplosion(x: Float, y: Float) {
+        val anim = explosionPool.poll() ?: FrameAnimation(explosionRects, 15)
+        anim.reset()
+        activeExplosions += ExplosionInstance(anim, x, y)
+    }
 
 
     init {
@@ -107,9 +129,12 @@ class GameView(context: Context) : View(context) {
         repeat(5) {
             val x = rng.nextInt(backgroundMap.width).toFloat()
             val y = rng.nextInt(backgroundMap.height).toFloat()
-            enemies.add(Enemy(x, y, 100000, 150, 0, 100000, 100))
+            enemies.add(Enemy(x, y, 10000, 15000, 0, 10000, 15000))
         }
     }
+
+
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
 
@@ -127,7 +152,8 @@ class GameView(context: Context) : View(context) {
         frameCount++
         super.onDraw(canvas)
         //VISTA HACIA ENEMIGO ATACANDO
-        if (isAttacking && selectedEnemy != null) {
+        // 1. Actualiza la orientación de la nave (solo si está atacando y hay objetivo)
+        if (isAttacking && selectedEnemy != null && selectedEnemy!!.getHealth() > 0) {
             val dx = selectedEnemy!!.getX() - ship.getX()
             val dy = selectedEnemy!!.getY() - ship.getY()
 
@@ -135,6 +161,27 @@ class GameView(context: Context) : View(context) {
             val directions = List(32) { i -> (i * 11.25).roundToInt() }
             val closestAngle = directions.minByOrNull { abs(it - angle) } ?: 0
             shipBitmap = shipSprites[closestAngle] ?: shipBitmap
+
+            // Disparo visual doble o simple
+            if (frameCount % 20 == 0) {
+                val shipCenterX = ship.getX() + shipSize / 2f
+                val shipCenterY = ship.getY() + shipSize / 2f
+
+                val angleRad = atan2(dy, dx)
+                val spread = 25f
+                val offsetX = cos(angleRad + Math.PI / 2).toFloat() * spread
+                val offsetY = sin(angleRad + Math.PI / 2).toFloat() * spread
+
+                if ((frameCount / 20) % 2 == 0) {
+                    projectiles.add(Projectile(shipCenterX + offsetX, shipCenterY + offsetY, 20f,selectedEnemy!!, true))
+                    projectiles.add(Projectile(shipCenterX - offsetX, shipCenterY - offsetY, 20f,selectedEnemy!!, true))
+                } else {
+                    projectiles.add(Projectile(shipCenterX, shipCenterY, 20f,selectedEnemy!!, true))
+                }
+            }
+        } else if (selectedEnemy != null && selectedEnemy!!.getHealth() <= 0) {
+            selectedEnemy = null
+            isAttacking = false
         }
 
         val screenW = width
@@ -174,20 +221,35 @@ class GameView(context: Context) : View(context) {
             // Actualiza también la posición lógica del objeto Ship
             ship.moveBy(moveDx, moveDy)
         }
+        // --- límites del universo ---
+        // --- movimiento continuo del jugador ---
+        if (isMoving) {
+            /* 1️⃣  Calcula la candidata SIN tocar aún las coords del ship */
+            val nextX = (shipMapX + moveDx).coerceIn(0f, WORLD_WIDTH  - shipSize)
+            val nextY = (shipMapY + moveDy).coerceIn(0f, WORLD_HEIGHT - shipSize)
+
+            /* 2️⃣  Delta realmente permitido tras hacer clamp */
+            val dxClamped = nextX - shipMapX
+            val dyClamped = nextY - shipMapY
+
+            /* 3️⃣  Actualiza las DOS fuentes de verdad con el mismo delta */
+            shipMapX = nextX
+            shipMapY = nextY
+            ship.moveBy(dxClamped, dyClamped)
+        }
 
         //******************** Enemigo
         //*********** Dibujar enemigos
         for (enemy in enemies) {
             val enemyScreenX = (enemy.getX() - shipMapX) + centerX
             val enemyScreenY = (enemy.getY() - shipMapY) + centerY
-
-
+            val verticalOffset = 7f
 
             val enemyRect = RectF(
                 enemyScreenX - enemySize / 2,
-                enemyScreenY - enemySize / 2,
+                enemyScreenY - enemySize / 2 + verticalOffset,
                 enemyScreenX + enemySize / 2,
-                enemyScreenY + enemySize / 2
+                enemyScreenY + enemySize / 2 + verticalOffset
             )
             canvas.drawBitmap(enemyBitmap, null, enemyRect, paint)
 
@@ -242,8 +304,8 @@ class GameView(context: Context) : View(context) {
             val enemyDy = shipMapY - enemy.getY()
             val distanceenemy = sqrt(enemyDx * enemyDx + enemyDy * enemyDy)
 
-            val detectionRange = 1500f       // Rango de detección para seguir
-            val stopRange = 150f             // Rango mínimo para detenerse (colisión simulada)
+            val detectionRange = 1000f       // Rango de detección para seguir
+            val stopRange = 175f             // Rango mínimo para detenerse (colisión simulada)
             val enemySpeed = 5f             // Velocidad del enemigo
 
             if (distanceenemy < detectionRange && distanceenemy > stopRange) {
@@ -252,27 +314,13 @@ class GameView(context: Context) : View(context) {
                 enemy.moveBy(moveX, moveY)
             }
 
-            val shootRange = 1000f
+            val shootRange = 500f
             val timeBetweenShots = 60  // frames (~1s a 60fps)
             if (distanceenemy < shootRange && frameCount % timeBetweenShots == 0) {
                 enemyShoot(enemy.getX(), enemy.getY())
             }
 
-            // 💥 ATAQUE DE LA NAVE
-            if (isAttacking && frameCount % 20 == 0 && selectedEnemy != null) {
-                val projectile = Projectile(
-                    x = ship.getX(),
-                    y = ship.getY(),
-                    target = selectedEnemy!!,
-                    disparadoPorJugador = true,
-                    speed = 20f
-                )
-                projectiles.add(projectile)
-            }
-
         }
-        invalidate()
-
         //PROYECTILES enemigos
 
         val iterator = projectiles.iterator()
@@ -297,6 +345,7 @@ class GameView(context: Context) : View(context) {
                     }
                     if (proj.target is Enemy) {
                         enemies.remove(proj.target)
+                        spawnExplosion(proj.target.getX(), proj.target.getY())
                     }
                 }
                 iterator.remove()
@@ -349,7 +398,7 @@ class GameView(context: Context) : View(context) {
                 val dist = sqrt(dx * dx + dy * dy)
 
                 if (dist > 800f) {  // Distancia mínima al jugador para evitar spawn sobre él
-                    enemies.add(Enemy(newX, newY, 100, 100, 0, 100, 100))
+                    enemies.add(Enemy(newX, newY, 10000, 15000, 0, 10000, 15000))
                     safe = true
                 }
             }
@@ -402,9 +451,25 @@ class GameView(context: Context) : View(context) {
             canvas.drawText("Escudo: ${shipShield.toInt()}", baseX + 10f, baseY + 24f, paint)
         }
 
+        //EXPLOSIONES
+        // --- explosiones ---
+        val dt = 1f / 60f   // o usa tu delta real
+        for (exp in activeExplosions.toList()) {
+            exp.anim.update(dt)
+            val screenX = (exp.x - ship.getX()) + centerX
+            val screenY = (exp.y - ship.getY()) + centerY
+            exp.anim.draw(canvas, atlas, screenX, screenY)
+
+            if (exp.anim.finished) {
+                activeExplosions.remove(exp)
+                explosionPool.offer(exp.anim)
+            }
+        }
+
+        invalidate()
     }
     //*******************************
-    //PROYECTILES
+    //PROYECTILES ENEMIGOS
     private fun enemyShoot(enemyX: Float, enemyY: Float) {
         val projectile = Projectile(
             x = enemyX,
@@ -419,6 +484,9 @@ class GameView(context: Context) : View(context) {
 
 
     private fun drawMinimap(canvas: Canvas) {
+        val mscaleX = minimapSize / WORLD_WIDTH
+        val mscaleY = minimapSize / WORLD_HEIGHT
+
         // Dibujar minimapa en la esquina superior derecha
         val minimapX = (width - minimapSize - 50).toFloat() // Asegurar que sea Float
         val minimapY = 50f
@@ -445,6 +513,12 @@ class GameView(context: Context) : View(context) {
             val ey = minimapY + enemy.getY() * scaleY
             canvas.drawCircle(ex, ey, minimapShipSize, paint)
         }
+        // Coordenadas de la nave
+        val coordText = "X ${shipMapX.toInt()}  Y ${shipMapY.toInt()}"
+        paint.textSize = 30f
+        paint.color = Color.WHITE
+        canvas.drawText(coordText, minimapX, minimapY + minimapSize + 32f, paint)
+
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -507,6 +581,4 @@ class GameView(context: Context) : View(context) {
 
         return true
     }
-
-
 }

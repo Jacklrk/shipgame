@@ -6,8 +6,11 @@ import android.content.pm.ActivityInfo
 import android.view.View
 import android.view.Window
 import android.view.WindowManager
+
 class GameActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+
+
         // ✅ Llamar primero a super.onCreate
         super.onCreate(savedInstanceState)
 
@@ -32,7 +35,8 @@ class GameActivity : AppCompatActivity() {
                         or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                         or View.SYSTEM_UI_FLAG_FULLSCREEN
                 )
-
+        // CARGA atlas una sola vez
+        AtlasManager.load(this)
         // Establecer vista del juego
         setContentView(GameView(this))  // Ya está aquí, no es necesario llamarlo dos veces.
     }
