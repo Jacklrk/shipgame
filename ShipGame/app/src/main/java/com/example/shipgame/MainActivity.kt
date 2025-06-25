@@ -15,6 +15,9 @@ import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.ui.PlayerView
 import android.util.Log
 import com.google.android.exoplayer2.PlaybackException
+import android.widget.ImageButton
+
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -50,11 +53,17 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         // Botón Inicio
-        findViewById<Button>(R.id.start_button).setOnClickListener {
+        findViewById<ImageButton>(R.id.start_button).setOnClickListener {
             startActivity(Intent(this, GameActivity::class.java))
         }
-        // Salir
-        findViewById<Button>(R.id.btn_exit).setOnClickListener { finish() }
+        // Salir  (usa ImageButton, no Button)
+        findViewById<ImageButton>(R.id.btn_exit).setOnClickListener { finish() }
+
+        // (opcional) los otros tres son meramente decorativos
+        findViewById<ImageButton>(R.id.btn_hangar)   // sin listener: ya estás en Hangar
+        findViewById<ImageButton>(R.id.btn_profile)  // TODO: abrir pantalla Perfil
+        findViewById<ImageButton>(R.id.btn_shop)     // TODO: abrir pantalla Tienda
+
 
         // Foto
         val avatar = findViewById<ImageView>(R.id.saturn_top)

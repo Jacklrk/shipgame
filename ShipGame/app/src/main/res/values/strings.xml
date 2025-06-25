@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">ShipGame</string>
+
+    <!-- descripción accesible para el botón Inicio -->
+    <string name="inicio">Botón Inicio</string>
+    <string name="hangar">Hangar</string>
+    <string name="perfil">Perfil</string>
+    <string name="tienda">Tienda</string>
+    <string name="salir">Salir</string>
+
 </resources>
