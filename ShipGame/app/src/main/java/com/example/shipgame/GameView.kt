@@ -23,7 +23,7 @@ class GameView(context: Context) : View(context) {
     private val WORLD_HEIGHT = 5_000f
     //NAVE PROPIEDADES
     private val spriteAngles = List(32) { i -> (i * 11.25).roundToInt() }
-    private val ship = Ship(x,y,vida = 80000, escudo = 100000,maxvida = 80000,maxescudo = 100000,0, velocidad = 3f)
+    private val ship = Ship(x,y,vida = 70000, escudo = 50000,maxvida = 80000,maxescudo = 100000,0, velocidad = 3f)
     private val paint = Paint()
     private var shipBitmap: Bitmap
     private val shipSize = 150
@@ -36,6 +36,13 @@ class GameView(context: Context) : View(context) {
     private var isMoving = false
     private var moveDx = 0f
     private var moveDy = 0f
+
+    //REGENERACIÓN NAVE ##
+    private val REGEN_DELAY_MS   = 6_000L   // 4 s sin daño ni disparos
+    private val SHIELD_REGEN_PS  = 1_000f     // puntos por segundo
+    private val LIFE_REGEN_PPS   = 500f
+
+
 
     /* ------------- Star field ----------------------------- */
     private data class Star(val x: Float, val y: Float, val r: Float, val alpha: Int)
@@ -119,12 +126,21 @@ class GameView(context: Context) : View(context) {
         BitmapFactory.decodeResource(resources, R.drawable.laser2)
     private var isAttacking = false
 
-    //EXPLOSIONES
+    //EXPLOSIONES y más animaciones
     // --- explosiones ---
-    private val atlas = AtlasManager.bitmap()
-    private val explosionRects = AtlasManager.frames("explosion")
+    private val atlas = AtlasManager.bitmap("res_explosion")!!
+    private val shieldAtlas = AtlasManager.bitmap("escudoreg")!!
+    private val lifeAtlas   = AtlasManager.bitmap("vidareg")!!
+    private val explosionRects = AtlasManager.frames("res_explosion")
+    private val escudoRects      = AtlasManager.frames("escudoreg")
+    private val vidaRects        = AtlasManager.frames("vidareg")
     private val activeExplosions = mutableListOf<ExplosionInstance>()
     private val explosionPool = ArrayDeque<FrameAnimation>()
+
+    /* 1.  Atributos (junto a explosiones) */
+    private val shieldAnim = FrameAnimation(escudoRects, fps = 25)
+    private val lifeAnim   = FrameAnimation(vidaRects,   fps = 20)
+
 
     private data class ExplosionInstance(
         val anim: FrameAnimation,
@@ -204,7 +220,7 @@ class GameView(context: Context) : View(context) {
         repeat(5) {
             val x = rng.nextInt(backgroundMap.width).toFloat()
             val y = rng.nextInt(backgroundMap.height).toFloat()
-            enemies.add(Enemy(x, y, 10000, 15000, 0, 10000, 15000))
+            enemies.add(Enemy("-=Lordakium=-" ,x, y, 10000, 15000, 0, 10000, 15000))
         }
     }
 
@@ -251,11 +267,40 @@ class GameView(context: Context) : View(context) {
         )
 
     }
-
+    var lastFrameTime = System.currentTimeMillis()
 
     override fun onDraw(canvas: Canvas) {
         frameCount++
         super.onDraw(canvas)
+        // 1. calcular dt (ver punto ①)
+        val now = System.currentTimeMillis()
+        val dt  = (now - lastFrameTime) / 1000f
+        lastFrameTime = now
+
+// 2. chequeo de 4 s de calma
+        val idle = (now - ship.lastHitTime  > REGEN_DELAY_MS) &&
+                (now - ship.lastShotTime > REGEN_DELAY_MS)
+
+// 3. flags
+        ship.shieldRegenActive = idle && ship.getShield() < ship.getMaxShield()
+        ship.lifeRegenActive   = idle && ship.getHealth() < ship.getMaxHealth()
+
+// 4. reiniciar animaciones si terminaron
+        if (ship.shieldRegenActive && shieldAnim.finished) shieldAnim.reset()
+        if (ship.lifeRegenActive   && lifeAnim.finished)   lifeAnim.reset()
+
+// 5. sumar puntos (dt real)
+        if (ship.shieldRegenActive) {
+            ship.addShield((SHIELD_REGEN_PS * dt).toInt())
+            if (ship.getShield() >= ship.getMaxShield()) ship.shieldRegenActive = false
+        }
+        if (ship.lifeRegenActive) {
+            ship.addHealth((LIFE_REGEN_PPS * dt).toInt())
+            if (ship.getHealth() >= ship.getMaxHealth()) ship.lifeRegenActive = false
+        }
+
+
+
         if (autoAimOn && (selectedEnemy == null || selectedEnemy!!.getHealth() <= 0)) {
             selectedEnemy = pickNearestEnemy()
         }
@@ -273,6 +318,9 @@ class GameView(context: Context) : View(context) {
 
             // Disparo visual doble o simple
             if (frameCount % 20 == 0) {
+                ship.lastShotTime        = System.currentTimeMillis()
+                ship.shieldRegenActive   = false
+                ship.lifeRegenActive     = false
                 val shipCenterX = ship.getX() + shipSize / 2f
                 val shipCenterY = ship.getY() + shipSize / 2f
 
@@ -291,7 +339,10 @@ class GameView(context: Context) : View(context) {
         } else if (selectedEnemy != null && selectedEnemy!!.getHealth() <= 0) {
             selectedEnemy = null
             isAttacking = false
+
         }
+
+
 
         val screenW = width
         val screenH = height
@@ -352,6 +403,23 @@ class GameView(context: Context) : View(context) {
             ship.moveBy(dxClamped, dyClamped)
         }
 
+        /* 3.  Después de dibujar la nave */
+        // después de dibujar la nave
+        val shipX = centerX.toFloat()
+        val shipY = centerY.toFloat()
+
+        if (ship.shieldRegenActive) {
+            shieldAnim.update(dt)
+            shieldAnim.draw(canvas, shieldAtlas, shipX, shipY)   // ← usa el atlas de escudo
+        }
+
+        if (ship.lifeRegenActive) {
+            lifeAnim.update(dt)
+            lifeAnim.draw(canvas,  lifeAtlas,  shipX, shipY)     // ← usa el atlas de vida
+        }
+
+
+
         //******************** Enemigo
         //*********** Dibujar enemigos
         for (enemy in enemies) {
@@ -359,6 +427,7 @@ class GameView(context: Context) : View(context) {
             /* ────────────────────────────
              *  A) CÁLCULOS DE PANTALLA
              * ──────────────────────────── */
+
             val enemyScreenX = (enemy.getX() - shipMapX) + centerX
             val enemyScreenY = (enemy.getY() - shipMapY) + centerY
             val verticalOffset = 7f
@@ -371,6 +440,16 @@ class GameView(context: Context) : View(context) {
                 enemyScreenY + enemySize / 2 + verticalOffset
             )
             canvas.drawBitmap(enemyBitmap, null, enemyRect, paint)
+            // Nombre en rojo centrado bajo el sprite
+            paint.color = Color.RED
+            paint.textSize = 28f
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(
+                enemy.name,
+                enemyScreenX,                         // X centro
+                enemyScreenY + enemySize / 2f + 24f,  // un poco debajo del sprite
+                paint
+            )
 
             /* ────────────────────────────
              *  B) MARCADOR si es objetivo
@@ -399,7 +478,7 @@ class GameView(context: Context) : View(context) {
                 val barMaxWidth = 80f
                 val barHeight = 10f
                 val barX = enemyScreenX - barMaxWidth / 2
-                var barY = markerY + markerSize + 5f
+                var barY = markerY - (barHeight * 2 + 5f + 4f)
 
                 // Vida (verde)
                 paint.color = Color.DKGRAY
@@ -470,12 +549,15 @@ class GameView(context: Context) : View(context) {
             if (distToPlayer < shootRange && frameCount % timeBetweenShots == 0) {
                 enemyShoot(enemy.getX(), enemy.getY())
             }
+
         }
 
 
         //PROYECTILES enemigos
         val iterator = projectiles.iterator()
+
         while (iterator.hasNext()) {
+
             val proj = iterator.next()
             if (!proj.active) {
                 iterator.remove()
@@ -549,7 +631,7 @@ class GameView(context: Context) : View(context) {
                 val dist = sqrt(dx * dx + dy * dy)
 
                 if (dist > 800f) {  // Distancia mínima al jugador para evitar spawn sobre él
-                    enemies.add(Enemy(newX, newY, 10000, 15000, 0, 10000, 15000))
+                    enemies.add(Enemy("-=Lordakium=-",newX, newY, 10000, 15000, 0, 10000, 15000))
                     safe = true
                 }
             }
@@ -650,7 +732,7 @@ class GameView(context: Context) : View(context) {
 
         //EXPLOSIONES
         // --- explosiones ---
-        val dt = 1f / 60f   // o usa tu delta real
+          // o usa tu delta real
         for (exp in activeExplosions.toList()) {
             exp.anim.update(dt)
             val screenX = (exp.x - ship.getX()) + centerX
